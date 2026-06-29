@@ -2,110 +2,131 @@ import Head from "next/head";
 import { useState } from "react";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
+import { useRouter } from "next/router";
 
-// 1. Definimos la misma orden que usaste en el Sandbox
-const REGISTRO_MUTATION = gql`
-  mutation IniciarEnlace($username: String!, $password: String!) {
+// 1. Mutación de LOGIN
+const LOGIN_MUTATION = gql`
+  mutation IniciarSesion($username: String!, $password: String!) {
+    loginUser(username: $username, password: $password) {
+      token
+      user {
+        id
+        username
+        status
+      }
+    }
+  }
+`;
+
+// 2. Mutación de REGISTRO
+const REGISTER_MUTATION = gql`
+  mutation RegistrarOperador($username: String!, $password: String!) {
     registerUser(username: $username, password: $password) {
       id
       username
-      status
     }
   }
 `;
 
 export default function Home() {
-  // 2. Creamos la "memoria" para los campos de texto
+  const router = useRouter();
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [isLoginMode, setIsLoginMode] = useState(true);
 
-  // 3. Preparamos la función de Apollo
-  const [iniciarEnlace, { data, loading, error }] =
-    useMutation(REGISTRO_MUTATION);
+  const [iniciarSesion, { loading: loadingLogin }] =
+    useMutation(LOGIN_MUTATION);
+  const [registrarUsuario, { loading: loadingRegister }] =
+    useMutation(REGISTER_MUTATION);
 
-  // 4. Qué ocurre al pulsar el botón
+  const loading = isLoginMode ? loadingLogin : loadingRegister;
+
   const handleSubmit = async (e) => {
-    e.preventDefault(); // Evita que la página se recargue al enviar
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
     try {
-      await iniciarEnlace({
-        variables: { username, password },
-      });
-      // Limpiamos los campos tras el éxito
-      setUsername("");
-      setPassword("");
+      if (isLoginMode) {
+        // --- LÓGICA DE LOGIN ---
+        const response = await iniciarSesion({
+          variables: { username, password },
+        });
+
+        const { token } = response.data.loginUser;
+        localStorage.setItem("neon_token", token);
+
+        // Añadimos el mensaje de bienvenida
+        setSuccessMessage(
+          "Acceso concedido. Estableciendo enlace con el núcleo...",
+        );
+
+        // Hacemos una pausa de 1.5 segundos antes de viajar al Dashboard
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 1500);
+      } else {
+        // --- LÓGICA DE REGISTRO ---
+        const response = await registrarUsuario({
+          variables: { username, password },
+        });
+
+        const newUser = response.data.registerUser.username;
+        setSuccessMessage(
+          `Operador ${newUser} registrado con éxito. Ya puede iniciar sesión.`,
+        );
+        setIsLoginMode(true);
+        setPassword("");
+      }
     } catch (err) {
-      console.error("Error en la conexión:", err);
+      setErrorMessage(
+        err.message || "Error de conexión con el servidor principal.",
+      );
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-200 font-sans selection:bg-cyan-500 selection:text-white relative overflow-hidden">
       <Head>
-        <title>Terminal Neón</title>
+        <title>Terminal Neón - Acceso</title>
       </Head>
 
-      {/* Círculos de fondo */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-cyan-600/20 rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-fuchsia-600/20 rounded-full blur-[100px] pointer-events-none"></div>
 
-      {/* --- BARRA DE NAVEGACIÓN (Se mantiene igual) --- */}
       <header className="border-b border-cyan-500/30 bg-gray-950/80 backdrop-blur-md sticky top-0 z-50">
         <nav className="flex items-center justify-between p-6 container mx-auto">
           <div className="flex items-center gap-3">
-            <svg
-              className="h-10 w-10 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 54 64"
-              fill="currentColor"
-            >
-              <path d="M53.52,1.87l-22,5.39a1.61,1.61,0,0,1-1.23-.21L19.89.25a1.57,1.57,0,0,0-1.3-.19l-18,5.3A.77.77,0,0,0,0,6.09V16.87L18.59,11.4a1.57,1.57,0,0,1,1.3.19l10.4,6.79a1.53,1.53,0,0,0,1.23.21L54,13.09V2.23a.39.39,0,0,0-.39-.38Z"></path>
-            </svg>
             <span className="text-xl font-bold tracking-widest text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-fuchsia-500 drop-shadow-[0_0_5px_rgba(34,211,238,0.5)]">
               SYS_NAV
             </span>
           </div>
-          <div className="text-sm font-mono text-cyan-400/70 hidden lg:flex gap-8 tracking-widest uppercase">
-            <a
-              href="#"
-              className="hover:text-cyan-300 hover:drop-shadow-[0_0_5px_rgba(34,211,238,0.8)] transition-all"
-            >
-              Módulos
-            </a>
-            <a
-              href="#"
-              className="hover:text-cyan-300 hover:drop-shadow-[0_0_5px_rgba(34,211,238,0.8)] transition-all"
-            >
-              Red
-            </a>
-          </div>
-          <div className="hidden lg:block">
-            <button className="py-2 px-6 border border-cyan-500 text-cyan-400 font-mono tracking-widest uppercase text-sm hover:bg-cyan-500/10 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] transition-all rounded">
-              Desconectar
-            </button>
-          </div>
         </nav>
       </header>
 
-      {/* --- SECCIÓN PRINCIPAL --- */}
       <main className="mt-16 lg:mt-32 px-6 relative z-10">
         <section className="container mx-auto">
           <div className="w-full lg:flex items-center gap-16">
-            {/* Textos de la izquierda */}
             <div className="w-full lg:w-1/2">
               <div className="inline-block px-3 py-1 mb-6 border border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-400 font-mono text-xs tracking-widest rounded shadow-[0_0_10px_rgba(217,70,239,0.2)]">
-                ESTADO: EN LÍNEA
+                ESTADO:{" "}
+                {isLoginMode ? "REQUIERE AUTENTICACIÓN" : "NUEVO REGISTRO"}
               </div>
               <h1 className="text-5xl lg:text-7xl font-black text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-fuchsia-500 mb-6 drop-shadow-[0_0_10px_rgba(34,211,238,0.3)]">
-                Acceso a la Red Principal
+                {isLoginMode
+                  ? "Acceso a la Red Principal"
+                  : "Alta de Nuevo Operador"}
               </h1>
               <p className="text-lg lg:text-xl font-light text-cyan-100/60 mb-8 leading-relaxed">
-                Establezca conexión con los servidores de núcleo. Ingrese sus
-                credenciales de administrador para sincronizar los paquetes de
-                datos y activar los protocolos de seguridad.
+                {isLoginMode
+                  ? "Ingrese sus credenciales de administrador para validar su identidad y acceder al núcleo del sistema."
+                  : "Registre su nuevo ID y clave de encriptación en la base de datos principal para obtener autorización."}
               </p>
             </div>
 
-            {/* Formulario */}
             <div className="w-full lg:w-1/2 mt-12 lg:mt-0">
               <form
                 onSubmit={handleSubmit}
@@ -147,30 +168,54 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Mensajes de respuesta dinámicos */}
-                {error && (
-                  <p className="text-red-400 mb-4 font-mono text-sm">
-                    Error: Conexión rechazada.
-                  </p>
+                {errorMessage && (
+                  <div className="mb-4 p-3 border border-red-500/50 bg-red-500/10 rounded">
+                    <p className="text-red-400 font-mono text-sm uppercase">
+                      Error: {errorMessage}
+                    </p>
+                  </div>
                 )}
-                {data && (
-                  <p className="text-fuchsia-400 mb-4 font-mono text-sm">
-                    ¡Enlace establecido! Operador {data.registerUser.username}{" "}
-                    registrado.
-                  </p>
+                {successMessage && (
+                  <div className="mb-4 p-3 border border-green-500/50 bg-green-500/10 rounded">
+                    <p className="text-green-400 font-mono text-sm uppercase">
+                      {successMessage}
+                    </p>
+                  </div>
                 )}
 
                 <button
                   type="submit"
-                  disabled={loading}
-                  className={`w-full py-4 font-bold tracking-widest uppercase rounded transition-all duration-300 focus:outline-none ${
-                    loading
+                  disabled={loading || (isLoginMode && successMessage !== "")}
+                  className={`w-full py-4 font-bold tracking-widest uppercase rounded transition-all duration-300 focus:outline-none mb-4 ${
+                    loading || (isLoginMode && successMessage !== "")
                       ? "bg-gray-700 text-gray-500 cursor-not-allowed"
                       : "bg-linear-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-gray-950 shadow-[0_0_20px_rgba(6,182,212,0.5)] hover:shadow-[0_0_30px_rgba(6,182,212,0.8)]"
                   }`}
                 >
-                  {loading ? "PROCESANDO..." : "Inicializar Enlace"}
+                  {loading
+                    ? "PROCESANDO..."
+                    : isLoginMode
+                      ? successMessage
+                        ? "ENLAZANDO..."
+                        : "Autenticar"
+                      : "Registrar Operador"}
                 </button>
+
+                <div className="text-center mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLoginMode(!isLoginMode);
+                      setErrorMessage("");
+                      setSuccessMessage("");
+                    }}
+                    className="text-cyan-400/70 hover:text-cyan-300 font-mono text-sm tracking-widest uppercase underline decoration-cyan-500/30 underline-offset-4 transition-all"
+                  >
+                    {isLoginMode
+                      ? "¿No tienes credenciales? Solicitar acceso"
+                      : "¿Ya tienes acceso? Iniciar Sesión"}
+                  </button>
+                </div>
               </form>
             </div>
           </div>
